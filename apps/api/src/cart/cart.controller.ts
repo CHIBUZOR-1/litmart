@@ -4,6 +4,8 @@ import { CartService } from './cart.service.js';
 import { AccessGuard } from '../auth/guards/access.guard.js';
 import { AddCartItemDto } from './dto/addCartItem.dto.js';
 import { UpdateCartItemDto } from './dto/updateCartItem.dto.js';
+import type { Request } from 'express';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 type AuthenticatedRequest = Request & {
     user: {
@@ -17,6 +19,8 @@ export class CartController {
     constructor(private readonly cartService: CartService) {}
 
     @Post('items')
+    @ApiOperation({ summary: 'Add a product to cart' })
+    @ApiResponse({ status: 201, description: 'Item added to cart' })
     addItem(
         @Req() req: AuthenticatedRequest,
         @Body() dto: AddCartItemDto,

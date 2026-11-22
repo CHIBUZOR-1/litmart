@@ -24,8 +24,8 @@ export class ProductsController {
     constructor(private readonly productsService: ProductsService) {}
 
     @Post()
-    //@UseGuards(AccessGuard, RolesGuard)
-    //@Roles(Role.ADMIN)
+    @UseGuards(AccessGuard, RolesGuard)
+    @Roles(Role.ADMIN)
     @ApiOperation({ summary: 'Create a new product' })
     @ApiResponse({ status: 201, description: 'Product created successfully' })
     @ApiResponse({ status: 400, description: 'Invalid product data or category' })
