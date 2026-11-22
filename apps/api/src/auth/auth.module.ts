@@ -5,10 +5,12 @@ import { AuthController } from './auth.controller.js';
 import { UsersModule } from '../users/users.module.js';
 import { JwtModule } from '@nestjs/jwt';
 import { AccessGuard } from './guards/access.guard.js';
+import { EmailModule } from '../email/email.module.js';
 
 @Module({
   imports: [
     UsersModule,
+    EmailModule,
     JwtModule.register({}),
   ],
   providers: [AuthService, AccessGuard],

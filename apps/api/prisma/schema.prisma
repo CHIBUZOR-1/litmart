@@ -80,6 +80,12 @@ model User {
   role         Role     @default(CUSTOMER)
 
   isActive     Boolean  @default(true)
+  isEmailVerified Boolean   @default(false)
+  verificationToken          String?   @unique
+  verificationTokenExpiresAt DateTime?
+
+  resetPasswordToken          String?   @unique
+  resetPasswordTokenExpiresAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -163,6 +169,8 @@ model Product {
 
   name        String
   slug        String   @unique
+  brand       String?
+  isNewArrival Boolean @default(false)
   description String?
 
   // Used when the product DOES NOT have variants.
@@ -205,6 +213,7 @@ model ProductImage {
   productId  String
 
   url        String
+  publicId  String
   altText    String?
   sortOrder  Int      @default(0)
 
@@ -213,6 +222,20 @@ model ProductImage {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+}
+
+model ProductVariantImage {
+  id        String   @id @default(uuid())
+  variantId String
+  url       String
+  publicId  String
+  altText   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
 }
 
 // ─────────────────────────────────────────────
@@ -278,6 +301,7 @@ model ProductVariant {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   attributes ProductVariantAttribute[]
+  images ProductVariantImage[]
   cartItems  CartItem[]
   orderItems OrderItem[]
 

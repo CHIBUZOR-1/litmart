@@ -1,16 +1,19 @@
 // src/auth/auth.service.ts
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users/users.service.js';
 import { RegisterDto } from './dto/register.dto.js'; // Assuming you have this DTO
 import { LoginDto } from './dto/login.dto.js';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { ConfigService } from '@nestjs/config';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { EmailService } from '../email/email.service.js';
 
 @Injectable()
 export class AuthService {
     constructor(
         private readonly usersService: UsersService, 
+        private readonly emailService: EmailService,
         private readonly jwt: JwtService, 
         private readonly config: ConfigService,
     ) {}
@@ -29,17 +32,107 @@ export class AuthService {
         const passwordHash = await bcrypt.hash(dto.password, saltRounds);
 
         // 3. Delegate user creation to the UsersService
-        await this.usersService.create({
+        const user = await this.usersService.create({
             email,
             firstName: dto.firstName.trim(),
             lastName: dto.lastName.trim(),
             passwordHash,
         });
+
+        // Generate a secure verification token.
+        //const verificationToken = randomBytes(32).toString('hex');
+        const verificationToken = randomInt(100000, 1000000).toString();
+        // Store only its SHA-256 hash.
+        const tokenHash = this.hashToken(verificationToken);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await this.usersService.saveVerificationToken(
+          user.id,
+          tokenHash,
+          expiresAt,
+        );
+
+        // Send the original token through Brevo.
+        await this.emailService.sendVerificationEmail(
+            user.email,
+            user.firstName,
+            verificationToken,
+        );
         return {
             message: 'Registration successful',
             status: 'ok'
         };
     }
+    // VERIFY EMAIL 
+    async verifyEmail(token: string) {
+        if (!token) {
+            throw new BadRequestException('Verification token is required');
+        }
+        const tokenHash = this.hashToken(token);
+        const user = await this.usersService.findByVerificationToken(tokenHash);
+        if (!user) {
+            throw new BadRequestException(
+                'Invalid or expired verification token',
+            );
+        }
+        if (!user.verificationTokenExpiresAt || user.verificationTokenExpiresAt <= new Date()) {
+            throw new BadRequestException(
+                'Invalid or expired verification token',
+            );
+        }
+        if (user.isEmailVerified) {
+            throw new BadRequestException('Email is already verified');
+        }
+
+        await this.usersService.verifyEmail(user.id);
+        
+        await this.emailService.sendVerifiedEmail(
+            user.email,
+            user.firstName
+        );
+
+        return {
+            message: 'Email verified successfully. You can now log in.',
+            status: 'ok',
+        };
+    }
+      // RESEND VERIFICATION EMAIL
+    async resendVerificationEmail(email: string) {
+        const normalizedEmail = email.trim().toLowerCase();
+
+        const user = await this.usersService.findByEmail(normalizedEmail);
+
+        if (!user || user.isEmailVerified || !user.isActive) {
+        return {
+            message:
+            'If an eligible account exists, a verification email will be sent.',
+            status: 'ok',
+        };
+        }
+
+        const verificationToken = randomBytes(32).toString('hex');
+        const tokenHash = this.hashToken(verificationToken);
+
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await this.usersService.saveVerificationToken(
+            user.id,
+            tokenHash,
+            expiresAt,
+        );
+
+        await this.emailService.sendVerificationEmail(
+            user.email,
+            user.firstName,
+            verificationToken,
+        );
+
+        return {
+            message: 'If an eligible account exists, a verification email will be sent.',
+            status: 'ok',
+        };
+    }
+
     async login(dto: LoginDto) {
         // 1. Find the user by their email
         const email = dto.email.trim().toLowerCase();
@@ -59,6 +152,12 @@ export class AuthService {
             throw new UnauthorizedException('This account is inactive');
         }
 
+        if (!user.isEmailVerified) {
+            throw new UnauthorizedException(
+                'Please verify your email before logging in',
+            );
+        }
+
         // 3. Generate and return the JWT token
         const tokens = await this.generateTokens(user.id, user.role);
 
@@ -75,6 +174,86 @@ export class AuthService {
                 lastName: user.lastName,
                 role: user.role,
             },
+        };
+    }
+
+      // FORGOT PASSWORD
+    async forgotPassword(email: string) {
+        const normalizedEmail = email.trim().toLowerCase();
+
+        const user = await this.usersService.findByEmail(normalizedEmail);
+
+        // Don't reveal whether an email address is registered.
+        if (!user || !user.isActive || !user.isEmailVerified) {
+            return {
+                message: 'If an eligible account exists, a password-reset email will be sent.',
+                status: 'ok',
+            };
+        }
+
+        const resetToken = randomBytes(32).toString('hex');
+        const tokenHash = this.hashToken(resetToken);
+
+        // Reset token expires after 15 minutes.
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+        await this.usersService.savePasswordResetToken(
+            user.id,
+            tokenHash,
+            expiresAt,
+        );
+
+        const origin = this.config.get<string>('ORIGIN');
+
+            if (!origin) {
+            throw new Error('ORIGIN is not configured');
+        }
+
+        const resetUrl = `${origin.replace(/\/$/, '')}/litmart/password-reset/${resetToken}`;
+
+        await this.emailService.sendPasswordResetEmail(
+            user.email,
+            user.firstName,
+            resetUrl,
+        );
+
+        return {
+            message: 'If an eligible account exists, a password-reset email will be sent.',
+            status: 'ok',
+        };
+    }
+
+    // RESET PASSWORD
+    async resetPassword(token: string, newPassword: string) {
+        if (!token || !newPassword) {
+            throw new BadRequestException(
+                'Reset token and new password are required',
+            );
+        }
+
+        const tokenHash = this.hashToken(token);
+
+        const user = await this.usersService.findByPasswordResetToken(tokenHash);
+
+        if (!user) {
+            throw new BadRequestException(
+                'Invalid or expired password-reset token',
+            );
+        }
+
+        if (!user.resetPasswordTokenExpiresAt || user.resetPasswordTokenExpiresAt <= new Date()) {
+            throw new BadRequestException(
+                'Invalid or expired password-reset token',
+            );
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+
+        await this.usersService.resetPassword(user.id, passwordHash);
+
+        return {
+            message: 'Password reset successfully. Please log in again.',
+            status: 'ok',
         };
     }
 
@@ -114,7 +293,7 @@ export class AuthService {
 
         const user = await this.usersService.findById(payload.sub);
 
-        if (!user || !user.isActive || !user.hashedRefreshToken) {
+        if (!user || !user.isActive || !user.isEmailVerified || !user.hashedRefreshToken) {
             throw new UnauthorizedException('Invalid refresh session');
         }
         // Compare the supplied token against the stored hash.
@@ -172,5 +351,9 @@ export class AuthService {
         }
 
         return secret;
+    }
+    // HASH TOKENS
+    private hashToken(token: string): string {
+        return createHash('sha256').update(token).digest('hex');
     }
 }

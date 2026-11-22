@@ -1,4 +1,4 @@
-// src/user/user.service.ts
+// src/users/user.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateUserDto } from './dto/update.dto.js';
@@ -60,7 +60,7 @@ export class UsersService {
     }
 
     // Safely remove the hashed password string before sending it downstream
-    const { passwordHash: _, hashedRefreshToken, ...safeUser } = user;
+    const { passwordHash: __, hashedRefreshToken: _, verificationToken: ___, resetPasswordToken: ____, ...safeUser } = user;
     return safeUser;
   }
 
@@ -87,7 +87,7 @@ export class UsersService {
       data: dataToUpdate,
     });
 
-    const { passwordHash: _, ...safeUser } = updatedUser;
+    const { passwordHash: _, hashedRefreshToken: __, ...safeUser } = updatedUser;
     return safeUser;
   }
 
@@ -95,6 +95,73 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id: userId },
       data: { hashedRefreshToken }, // 👈 This should show no red squiggly lines now!
+    });
+  }
+
+  async saveVerificationToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        verificationToken: tokenHash,
+        verificationTokenExpiresAt: expiresAt,
+      },
+    });
+  }
+
+  async verifyEmail(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        isEmailVerified: true,
+        verificationToken: null,
+        verificationTokenExpiresAt: null,
+      },
+    });
+  }
+
+  async savePasswordResetToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        resetPasswordToken: tokenHash,
+        resetPasswordTokenExpiresAt: expiresAt,
+      },
+    });
+  }
+
+  async resetPassword(userId: string, passwordHash: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        resetPasswordToken: null,
+        resetPasswordTokenExpiresAt: null,
+        hashedRefreshToken: null,
+      },
+    });
+  }
+
+  async findByVerificationToken(tokenHash: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        verificationToken: tokenHash,
+      },
+    });
+  }
+
+  async findByPasswordResetToken(tokenHash: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        resetPasswordToken: tokenHash,
+      },
     });
   }
 
