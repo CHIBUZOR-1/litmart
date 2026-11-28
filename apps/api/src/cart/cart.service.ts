@@ -71,6 +71,7 @@ export class CartService {
                     },
                     select: {
                         stock: true,
+                        reservedStock: true,
                         isActive: true,
                         product: {
                             select: {
@@ -92,12 +93,13 @@ export class CartService {
                     );
                 }
 
-                currentStock = variant.stock;
+                currentStock = variant.stock - variant.reservedStock;
             } else {
                 const freshProduct = await tx.product.findUnique({
                     where: { id: product.id },
                     select: {
                         stock: true,
+                        reservedStock: true,
                         isActive: true,
                         isArchived: true,
                         variants: {
@@ -123,7 +125,7 @@ export class CartService {
                     );
                 }
 
-                currentStock = freshProduct.stock ?? 0;
+                currentStock = (freshProduct.stock ?? 0) - freshProduct.reservedStock;
             }
 
             // 5. Check whether this item already exists in the cart
@@ -281,6 +283,7 @@ export class CartService {
                     },
                     select: {
                         stock: true,
+                        reservedStock: true,
                         isActive: true,
                         product: {
                             select: {
@@ -302,12 +305,13 @@ export class CartService {
                     );
                 }
 
-                availableStock = variant.stock;
+                availableStock = variant.stock - variant.reservedStock;
             } else {
                 const product = await tx.product.findUnique({
                     where: { id: cartItem.productId },
                     select: {
                         stock: true,
+                        reservedStock: true,
                         isActive: true,
                         isArchived: true,
                         variants: {
@@ -333,7 +337,7 @@ export class CartService {
                     );
                 }
 
-                availableStock = product.stock ?? 0;
+                availableStock = (product.stock ?? 0) - product.reservedStock;
             }
 
             // 5. Check requested quantity against available stock
@@ -438,6 +442,7 @@ export class CartService {
                     },
                     select: {
                         stock: true,
+                        reservedStock: true,
                         isActive: true,
                         product: {
                             select: {
@@ -459,12 +464,13 @@ export class CartService {
                     );
                 }
 
-                availableStock = variant.stock;
+                availableStock = variant.stock - variant.reservedStock;
             } else {
                 const product = await tx.product.findUnique({
                     where: { id: cartItem.productId },
                     select: {
                         stock: true,
+                        reservedStock: true,
                         isActive: true,
                         isArchived: true,
                         variants: {
@@ -490,7 +496,7 @@ export class CartService {
                     );
                 }
 
-                availableStock = product.stock ?? 0;
+                availableStock = (product.stock ?? 0) - product.reservedStock;
             }
 
             const newQuantity = cartItem.quantity + 1;

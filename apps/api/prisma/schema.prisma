@@ -179,6 +179,7 @@ model Product {
 
   // Used when the product DOES NOT have variants.
   stock       Int?
+  reservedStock Int @default(0)
 
   sku         String?  @unique
 
@@ -292,6 +293,7 @@ model ProductVariant {
   price       Decimal  @db.Decimal(12, 2)
   currency    Currency
   stock       Int      @default(0)
+  reservedStock Int @default(0)
 
   isActive    Boolean  @default(true)
 
@@ -414,6 +416,11 @@ model Order {
   shippingState      String
   shippingCountry    String
   shippingPostalCode String?
+  originalCurrency Currency @default(USD)
+  originalSubtotal Decimal  @db.Decimal(12, 2)
+  exchangeRate     Decimal  @default(1) @db.Decimal(18, 6)
+  expiresAt DateTime?
+  reservationReleasedAt DateTime?
 
   shippingMethod     String?
 
@@ -433,6 +440,7 @@ model Order {
   @@index([addressId])
   @@index([status])
   @@index([createdAt])
+  @@index([status, expiresAt])
 }
 
 model OrderItem {
@@ -449,6 +457,7 @@ model OrderItem {
   unitPrice  Decimal  @db.Decimal(12, 2)
   currency   Currency
   quantity   Int
+  originalUnitPrice Decimal @db.Decimal(12, 2)
 
   subtotal   Decimal  @db.Decimal(12, 2)
 
@@ -588,4 +597,22 @@ model RecentlyViewed {
 
   @@unique([userId, productId])
   @@index([userId, viewedAt])
+}
+
+// ─────────────────────────────────────────────
+// EXCHANGE RATE
+// ─────────────────────────────────────────────
+
+model ExchangeRate {
+  id        String   @id @default(uuid())
+
+  baseCurrency   Currency @default(USD)
+  targetCurrency Currency @default(NGN)
+
+  rate      Decimal  @db.Decimal(18, 6)
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([baseCurrency, targetCurrency])
 }

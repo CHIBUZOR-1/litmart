@@ -13,13 +13,17 @@ import { WishlistModule } from './wishlist/wishlist.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
+import { AddressesModule } from './addresses/addresses.module.js';
+import { CouponModule } from './coupon/coupon.module.js';
+import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module.js';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [ ConfigModule.forRoot({
       isGlobal: true,
-    }), 
+    }), ScheduleModule.forRoot(),
     PrismaModule, 
     AuthModule, 
-    UsersModule, EmailModule, ProductsModule, CategoriesModule, CloudinaryModule, CartModule, WishlistModule, OrdersModule, PaymentsModule, ReviewsModule],
+    UsersModule, EmailModule, ProductsModule, CategoriesModule, CloudinaryModule, CartModule, WishlistModule, OrdersModule, PaymentsModule, ReviewsModule, AddressesModule, CouponModule, ExchangeRatesModule],
 })
 export class AppModule {}
